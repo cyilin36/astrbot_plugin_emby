@@ -68,4 +68,4 @@ astrbot_plugin_emby/
 - 指令操作：`/emby latest <展示数量>`。默认数量为10个
 - 自然语言：直接说出“最近库里有什么更新的”。默认数量为10个
 
-默认数量可以修改`main.py`中相对应的`Limit`参数。
+搜索数量可在`main.py`的`Limit`参数中修改.
