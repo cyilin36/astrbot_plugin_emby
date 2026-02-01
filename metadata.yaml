@@ -1,0 +1,23 @@
+name: astrbot_plugin_emby # 插件的唯一识别名
+desc: 关联自部署 Emby 媒体库。支持 LLM 自动检索影片、获取元数据及最近更新。 # 插件简短描述
+display_name: Emby 助手 # 插件的显示名称
+help: | # 插件的帮助信息
+  自部署 Emby 媒体库助手，支持智能搜索与管理。
+  
+  主要功能：
+  - LLM 自动检索：直接通过聊天搜索影片
+  - 媒体详情查询：获取评分、简介等信息
+  - 绑定系统：支持 QQ/UID 与 Emby 账号一一对应
+  - 服务器监控：查看实时观影活动与媒体库状态
+  
+  命令：
+  /emby search <关键词> - 搜索影片
+  /emby latest - 查看最近上架
+  /emby detail <ID> - 获取影片详情
+  /emby add <UID> <用户名> - (管理员) 绑定用户
+  /emby rm <UID> - (管理员) 解绑用户
+  /emby ls - (管理员) 查看绑定列表
+  /emby status - (管理员) 查看服务器状态
+version: v1.0 # 插件版本号
+author: cyilin36 # 作者
+repo: https://github.com/cyilin36/astrbot_plugin_emby # 插件的仓库地址
