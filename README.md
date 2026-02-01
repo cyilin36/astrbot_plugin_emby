@@ -17,7 +17,6 @@
 将插件文件夹放入AstrBot的`data/plugins/`目录下并重启astrbot，确保目录结构如下：
 
 ```
-Plaintext
 astrbot_plugin_emby/
 ├── main.py
 ├── metadata.yaml
@@ -41,7 +40,7 @@ astrbot_plugin_emby/
 ## 使用操作
 
 - `/emby add/rm/ls/status`分别表示：用户绑定、用户解绑、一览用户绑定信息、服务器状态。是管理员才能使用的指令。
-- `/emby search/latest/detail`分表表示：搜索、查看最近更新、查看影片元数据。所有人都可以使用。
+- `/emby search/latest/detail`分别表示：搜索、查看最近更新、查看影片元数据。所有人都可以使用。
 
 ### 用户绑定与解绑
 
@@ -57,7 +56,7 @@ astrbot_plugin_emby/
 - 指令搜索：`/emby search <关键词> <搜索数量>`，默认搜索数量为10个。
 - 自然语言：直接说出类似“库里面xxxxxxx”的话，默认数量为10个。
 
-默认搜索数量可以修改`main.py`中相对应的`Limit`参数。
+搜索数量可在`main.py`的`Limit`参数中修改.
 
 ### 获取元数据
 
