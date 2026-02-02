@@ -17,56 +17,52 @@
 将插件文件夹放入AstrBot的`data/plugins/`目录下并重启astrbot，确保目录结构如下：
 
 ```
-Plaintext
 astrbot_plugin_emby/
 ├── main.py
 ├── metadata.yaml
-├── config.json # emby服务器地址及其密钥
+├── _conf_schema.json # webui配置面板定义
 └── user_bindings.json # 用户信息存储
 ```
 
 ### 配置服务器信息
 
-编辑`config.json`,填入你的服务器信息：
+你可以在 AstrBot 的 **WebUI 插件配置面板** 中直接填写服务器信息。该插件会自动生成配置界面，支持修改：
 
-```
-{
-  "emby_host": "http://你的域名或IP:8096",
-  "api_key": "你的API密钥"
-}
-```
+- **Emby 服务器地址**：你的 Emby 访问 URL。
+- **API 密钥**：在 Emby 管理面板生成的密钥。
+- **条目数量限制**：设置搜索和最近上架默认展示的数量。
 
 >注意：API 密钥在Emby管理面板 -> 设置 -> API 密钥 中生成。
 
 ## 使用操作
 
 - `/emby add/rm/ls/status`分别表示：用户绑定、用户解绑、一览用户绑定信息、服务器状态。是管理员才能使用的指令。
-- `/emby search/latest/detail`分表表示：搜索、查看最近更新、查看影片元数据。所有人都可以使用。
+- `/emby search/latest/detail`分别表示：搜索、查看最近更新、查看影片元数据。所有人都可以使用。
 
 ### 用户绑定与解绑
 
 使用`/emby add <UID> <Emby用户名>`来绑定信息，实现与Emby账户相同的访问媒体库限制。使用`/emby rm <UID> `来解除绑定。
 
-数据会存储在`user_bindings.json`文件中。
+数据会存储在`user_bindings.json`文件中，包含 Emby ID 和用户名备注，方便管理。
 
 >UID可以使用`/sid`查看。
 >一个UID只能绑定一个Emby用户，但一个Emby用户可以绑定多个UID。
 
 ### 搜索影片
 
-- 指令搜索：`/emby search <关键词> <搜索数量>`，默认搜索数量为10个。
-- 自然语言：直接说出类似“库里面xxxxxxx”的话，默认数量为10个。
+- 指令搜索：`/emby search <关键词> <搜索数量>`。
+- 自然语言：直接说出类似“库里面xxxxxxx”的话。
 
-默认搜索数量可以修改`main.py`中相对应的`Limit`参数。
+默认展示数量可在 WebUI 插件配置面板中修改。
 
 ### 获取元数据
 
 - 指令搜索：`/emby detail <ID>`。ID是Emby中的`item?id=`，不懂得可以使用`/emby search`获取。
-- 自然语言：直接说出来即可，默认数量为10个。
+- 自然语言：直接说出来即可。
 
 ### 获取最近更新
 
-- 指令操作：`/emby latest <展示数量>`。默认数量为10个
-- 自然语言：直接说出“最近库里有什么更新的”。默认数量为10个
+- 指令操作：`/emby latest <展示数量>`。
+- 自然语言：直接说出“最近库里有什么更新的”。
 
-默认数量可以修改`main.py`中相对应的`Limit`参数。
+默认展示数量可在 WebUI 插件配置面板中修改。

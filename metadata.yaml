@@ -18,6 +18,6 @@ help: | # 插件的帮助信息
   /emby rm <UID> - (管理员) 解绑用户
   /emby ls - (管理员) 查看绑定列表
   /emby status - (管理员) 查看服务器状态
-version: v1.0 # 插件版本号
+version: v1.1 # 插件版本号
 author: cyilin36 # 作者
 repo: https://github.com/cyilin36/astrbot_plugin_emby # 插件的仓库地址

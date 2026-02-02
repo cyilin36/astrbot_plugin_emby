@@ -1,0 +1,26 @@
+{
+    "emby_host": {
+        "type": "string",
+        "description": "Emby 服务器地址",
+        "default": "",
+        "hint": "例如：http://192.168.1.10:8096"
+    },
+    "api_key": {
+        "type": "string",
+        "description": "Emby API 密钥",
+        "default": "",
+        "hint": "在 Emby 管理面板 -> 设置 -> API 密钥 中生成"
+    },
+    "search_limit": {
+        "type": "int",
+        "description": "搜索条目限制",
+        "default": 10,
+        "hint": "指令及 AI 搜索影片时返回的最大条目数"
+    },
+    "latest_limit": {
+        "type": "int",
+        "description": "最近上架条目限制",
+        "default": 10,
+        "hint": "查询最近上架影片时返回的最大条目数"
+    }
+}
