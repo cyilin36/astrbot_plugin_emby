@@ -40,7 +40,7 @@ class EmbyLatestTool(FunctionTool[AstrAgentContext]):
     plugin: Any = None
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> str:
         host, _, _, llimit = self.plugin._get_config_safe()
-        res = await self.plugin.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Series", "Recursive": True, "Limit": llimit}, context.context.event)
+        res = await self.plugin.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Episode", "Recursive": True, "Limit": llimit}, context.context.event)
         sid = await self.plugin._get_server_id()
         return json.dumps({"results": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
@@ -173,16 +173,24 @@ class EmbyPlugin(Star):
         '''最近上架：/emby latest [数量]'''
         _, _, _, llimit = self._get_config_safe()
         final_limit = limit if limit is not None else llimit
-        res = await self.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Series", "Recursive": True, "Limit": final_limit}, event)
+        res = await self.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Episode", "Recursive": True, "Limit": final_limit}, event)
         items = res.get("Items", [])
         if not items:
             yield event.plain_result("获取最新失败")
             return
-        out = [f"最近上架影片 (展示 {len(items)} 条):"]
+        out = [f"最近上架/更新 (展示 {len(items)} 条):"]
         for i in items:
+            name = i.get('Name')
+            # 如果是单集，尝试获取剧名和季度集数
+            if i.get('Type') == 'Episode':
+                series = i.get('SeriesName', '未知剧集')
+                season = i.get('ParentIndexNumber', 0)
+                episode = i.get('IndexNumber', 0)
+                name = f"{series} - S{season:02d}E{episode:02d} - {name}"
+            
             year = i.get('ProductionYear')
             year_str = f" [{year}]" if year else ""
-            out.append(f"- {i.get('Name')}{year_str} (ID: {i.get('Id')})")
+            out.append(f"- {name}{year_str} (ID: {i.get('Id')})")
         yield event.plain_result("\n".join(out))
 
     @emby.command("detail")
