@@ -15,12 +15,10 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.astr_agent_context import AstrAgentContext
 
 LATEST_MEDIA_TYPE_MAP = {
-    "全部": None,
+    "全部": "Movie,Episode,Audio",
     "电影": "Movie",
     "电视剧": "Episode",
     "音乐": "Audio",
-    "合集": "BoxSet",
-    "文件夹": "Folder",
 }
 
 LATEST_MEDIA_TYPE_LABELS = " / ".join(LATEST_MEDIA_TYPE_MAP.keys())
@@ -49,7 +47,7 @@ class EmbySearchTool(FunctionTool[AstrAgentContext]):
 @pydantic_dataclass
 class EmbyLatestTool(FunctionTool[AstrAgentContext]):
     name: str = "get_emby_latest"
-    description: str = f"查询 Emby 库中最近新增或更新的媒体条目。支持类型：{LATEST_MEDIA_TYPE_LABELS}。返回结果包含条目列表、服务器地址和服务器ID。"
+    description: str = f"查询 Emby 库中最近上新的媒体条目。支持类型：{LATEST_MEDIA_TYPE_LABELS}。返回结果包含条目列表、服务器地址和服务器ID。"
     parameters: dict = Field(default_factory=lambda: {
         "type": "object",
         "properties": {
@@ -134,10 +132,8 @@ class EmbyPlugin(Star):
             "SortOrder": "Descending",
             "Recursive": True,
             "Limit": limit,
+            "IncludeItemTypes": LATEST_MEDIA_TYPE_MAP[media_type],
         }
-        include_item_types = LATEST_MEDIA_TYPE_MAP[media_type]
-        if include_item_types:
-            params["IncludeItemTypes"] = include_item_types
         return params
 
     def _parse_latest_command_args(self, first_arg: str | None, second_arg: str | None, default_limit: int):
@@ -259,7 +255,7 @@ class EmbyPlugin(Star):
 
     @emby.command("latest")
     async def emby_latest(self, event: AstrMessageEvent, first_arg: str = None, second_arg: str = None):
-        '''最近更新：/emby latest [类型] [数量]'''
+        '''最近上新：/emby latest [类型] [数量]'''
         _, _, _, llimit = self._get_config_safe()
         media_type, final_limit, error = self._parse_latest_command_args(first_arg, second_arg, llimit)
         if error:
@@ -274,7 +270,7 @@ class EmbyPlugin(Star):
         if not items:
             yield event.plain_result("获取最新失败")
             return
-        out = [f"最近更新-{media_type} (展示 {len(items)} 条):"]
+        out = [f"最近上新-{media_type} (展示 {len(items)} 条):"]
         for i in items:
             name = i.get('Name')
             # 如果是单集，尝试获取剧名和季度集数
