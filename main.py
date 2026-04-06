@@ -14,6 +14,17 @@ from astrbot.core.agent.tool import FunctionTool
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.astr_agent_context import AstrAgentContext
 
+LATEST_MEDIA_TYPE_MAP = {
+    "全部": None,
+    "电影": "Movie",
+    "电视剧": "Episode",
+    "音乐": "Audio",
+    "合集": "BoxSet",
+    "文件夹": "Folder",
+}
+
+LATEST_MEDIA_TYPE_LABELS = " / ".join(LATEST_MEDIA_TYPE_MAP.keys())
+
 # --- 1. LLM 函数工具定义 ---
 
 @pydantic_dataclass
@@ -35,12 +46,27 @@ class EmbySearchTool(FunctionTool[AstrAgentContext]):
 @pydantic_dataclass
 class EmbyLatestTool(FunctionTool[AstrAgentContext]):
     name: str = "get_emby_latest"
-    description: str = "查询 Emby 库中最近新增或更新的媒体条目。返回结果包含条目列表、服务器地址和服务器ID。"
-    parameters: dict = Field(default_factory=lambda: {"type": "object", "properties": {}})
+    description: str = f"查询 Emby 库中最近新增或更新的媒体条目。支持类型：{LATEST_MEDIA_TYPE_LABELS}。返回结果包含条目列表、服务器地址和服务器ID。"
+    parameters: dict = Field(default_factory=lambda: {
+        "type": "object",
+        "properties": {
+            "media_type": {
+                "type": "string",
+                "description": f"可选媒体类型：{LATEST_MEDIA_TYPE_LABELS}。默认是全部。",
+            }
+        },
+    })
     plugin: Any = None
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> str:
         host, _, _, llimit = self.plugin._get_config_safe()
-        res = await self.plugin.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": True, "Limit": llimit}, context.context.event)
+        media_type, error = self.plugin._normalize_latest_media_type(kwargs.get("media_type"))
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+        res = await self.plugin.api_request(
+            "Items",
+            self.plugin._build_latest_query_params(llimit, media_type),
+            context.context.event,
+        )
         sid = await self.plugin._get_server_id()
         return json.dumps({"results": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
@@ -86,8 +112,49 @@ class EmbyPlugin(Star):
         # 如果用户没填协议头，默认使用 http
         if host and not host.startswith("http"):
             host = f"http://{host}"
-            
+        
         return host, key, search_limit, latest_limit
+
+    def _normalize_latest_media_type(self, media_type: str | None):
+        label = (media_type or "全部").strip()
+        if label not in LATEST_MEDIA_TYPE_MAP:
+            return None, f"不支持的类型，可选：{LATEST_MEDIA_TYPE_LABELS}"
+        return label, None
+
+    def _build_latest_query_params(self, limit: int, media_type: str):
+        params = {
+            "SortBy": "DateCreated",
+            "SortOrder": "Descending",
+            "Recursive": True,
+            "Limit": limit,
+        }
+        include_item_types = LATEST_MEDIA_TYPE_MAP[media_type]
+        if include_item_types:
+            params["IncludeItemTypes"] = include_item_types
+        return params
+
+    def _parse_latest_command_args(self, first_arg: str | None, second_arg: str | None, default_limit: int):
+        media_type = None
+        limit = default_limit
+
+        for raw_arg in (first_arg, second_arg):
+            if raw_arg is None:
+                continue
+            arg = raw_arg.strip()
+            if not arg:
+                continue
+            if arg.isdigit():
+                limit = int(arg)
+                continue
+            if media_type is not None:
+                return None, None, f"参数格式错误，支持：/emby latest [类型] [数量]"
+            media_type = arg
+
+        media_type, error = self._normalize_latest_media_type(media_type)
+        if error:
+            return None, None, error
+
+        return media_type, limit, None
 
     def _get_bindings(self):
         # 回归到独立文件管理
@@ -169,16 +236,20 @@ class EmbyPlugin(Star):
         yield event.plain_result("\n".join(out))
 
     @emby.command("latest")
-    async def emby_latest(self, event: AstrMessageEvent, limit: int = None):
-        '''最近更新：/emby latest [数量]'''
+    async def emby_latest(self, event: AstrMessageEvent, first_arg: str = None, second_arg: str = None):
+        '''最近更新：/emby latest [类型] [数量]'''
         _, _, _, llimit = self._get_config_safe()
-        final_limit = limit if limit is not None else llimit
-        res = await self.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": True, "Limit": final_limit}, event)
+        media_type, final_limit, error = self._parse_latest_command_args(first_arg, second_arg, llimit)
+        if error:
+            yield event.plain_result(error)
+            return
+
+        res = await self.api_request("Items", self._build_latest_query_params(final_limit, media_type), event)
         items = res.get("Items", [])
         if not items:
             yield event.plain_result("获取最新失败")
             return
-        out = [f"最近更新 (展示 {len(items)} 条):"]
+        out = [f"最近更新-{media_type} (展示 {len(items)} 条):"]
         for i in items:
             name = i.get('Name')
             # 如果是单集，尝试获取剧名和季度集数
