@@ -39,11 +39,13 @@ astrbot_plugin_emby/
 ## 使用操作
 
 - `/emby add/rm/ls/status`分别表示：用户绑定、用户解绑、一览用户绑定信息、服务器状态。是管理员才能使用的指令。
-- `/emby search/latest/detail`分别表示：搜索、查看最近更新、查看媒体元数据。所有人都可以使用。
+- `/emby search/latest/detail`分别表示：搜索、查看最近更新、查看媒体元数据。需先完成 UID 绑定后才能使用。
 
 ### 用户绑定与解绑
 
 使用`/emby add <UID> <Emby用户名>`来绑定信息，实现与Emby账户相同的访问媒体库限制。使用`/emby rm <UID> `来解除绑定。
+
+未绑定的 UID 调用 `/emby search`、`/emby latest`、`/emby detail` 以及对应的 LLM tools 时，会被直接拒绝访问，不再回退到全局 API key 视角。
 
 数据会存储在`user_bindings.json`文件中，包含 Emby ID 和用户名备注，方便管理。
 

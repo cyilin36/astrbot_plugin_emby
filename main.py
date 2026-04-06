@@ -24,6 +24,7 @@ LATEST_MEDIA_TYPE_MAP = {
 }
 
 LATEST_MEDIA_TYPE_LABELS = " / ".join(LATEST_MEDIA_TYPE_MAP.keys())
+USER_SCOPED_MEDIA_ENDPOINTS = ("Items",)
 
 # --- 1. LLM 函数工具定义 ---
 
@@ -41,6 +42,8 @@ class EmbySearchTool(FunctionTool[AstrAgentContext]):
         host, _, slimit, _ = self.plugin._get_config_safe()
         res = await self.plugin.api_request("Items", {"SearchTerm": kwargs.get("keyword"), "Recursive": True, "Limit": slimit}, context.context.event)
         sid = await self.plugin._get_server_id()
+        if "error" in res:
+            return json.dumps({"error": res["error"], "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
         return json.dumps({"results": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
 @pydantic_dataclass
@@ -68,6 +71,8 @@ class EmbyLatestTool(FunctionTool[AstrAgentContext]):
             context.context.event,
         )
         sid = await self.plugin._get_server_id()
+        if "error" in res:
+            return json.dumps({"error": res["error"], "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
         return json.dumps({"results": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
 @pydantic_dataclass
@@ -84,6 +89,8 @@ class EmbyDetailTool(FunctionTool[AstrAgentContext]):
         res = await self.plugin.api_request(f"Items/{kwargs.get('item_id')}", {}, context.context.event)
         host, _, _, _ = self.plugin._get_config_safe()
         sid = await self.plugin._get_server_id()
+        if "error" in res:
+            return json.dumps({"error": res["error"], "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
         return json.dumps({"detail": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
 # --- 2. 插件主类 ---
@@ -171,6 +178,14 @@ class EmbyPlugin(Star):
                 json.dump(bindings, f, indent=4, ensure_ascii=False)
         except: pass
 
+    def _requires_user_binding(self, endpoint: str) -> bool:
+        normalized_endpoint = endpoint.lstrip('/')
+        return any(
+            normalized_endpoint == scoped
+            or normalized_endpoint.startswith(f"{scoped}/")
+            for scoped in USER_SCOPED_MEDIA_ENDPOINTS
+        )
+
     async def _get_server_id(self):
         if hasattr(self, "_cached_server_id") and self._cached_server_id:
             return self._cached_server_id
@@ -188,6 +203,7 @@ class EmbyPlugin(Star):
         host, key, _, _ = self._get_config_safe()
         if not host: return {"error": "配置缺失"}
         host = host.rstrip('/')
+        requires_user_binding = self._requires_user_binding(endpoint)
         
         uid = None
         if event:
@@ -199,6 +215,9 @@ class EmbyPlugin(Star):
                 else:
                     uid = val
             except: pass
+
+        if requires_user_binding and not uid:
+            return {"error": "当前 UID 未绑定 Emby 用户，请联系管理员执行 /emby add"}
 
         if uid and not any(k in endpoint for k in ["Users", "System", "Public", "Sessions", "Library"]):
             url = f"{host}/emby/Users/{uid}/{endpoint.lstrip('/')}"
@@ -224,6 +243,9 @@ class EmbyPlugin(Star):
         _, _, slimit, _ = self._get_config_safe()
         final_limit = limit if limit is not None else slimit
         res = await self.api_request("Items", {"SearchTerm": keyword, "Recursive": True, "Limit": final_limit}, event)
+        if "error" in res:
+            yield event.plain_result(res["error"])
+            return
         items = res.get("Items", [])
         if not items:
             yield event.plain_result(f"未找到与 '{keyword}' 相关的结果")
@@ -245,6 +267,9 @@ class EmbyPlugin(Star):
             return
 
         res = await self.api_request("Items", self._build_latest_query_params(final_limit, media_type), event)
+        if "error" in res:
+            yield event.plain_result(res["error"])
+            return
         items = res.get("Items", [])
         if not items:
             yield event.plain_result("获取最新失败")
@@ -268,6 +293,9 @@ class EmbyPlugin(Star):
     async def emby_detail(self, event: AstrMessageEvent, item_id: str):
         '''查看详情：/emby detail <ID>'''
         res = await self.api_request(f"Items/{item_id}", {}, event)
+        if "error" in res:
+            yield event.plain_result(res["error"])
+            return
         if "Name" in res:
             year = res.get('ProductionYear')
             year_val = year if year else "未知"
