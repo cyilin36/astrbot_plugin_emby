@@ -35,12 +35,12 @@ class EmbySearchTool(FunctionTool[AstrAgentContext]):
 @pydantic_dataclass
 class EmbyLatestTool(FunctionTool[AstrAgentContext]):
     name: str = "get_emby_latest"
-    description: str = "查询 Emby 库中最近新上架的影视资源。返回结果包含影片列表、服务器地址和服务器ID。"
+    description: str = "查询 Emby 库中最近新增或更新的媒体条目。返回结果包含条目列表、服务器地址和服务器ID。"
     parameters: dict = Field(default_factory=lambda: {"type": "object", "properties": {}})
     plugin: Any = None
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> str:
         host, _, _, llimit = self.plugin._get_config_safe()
-        res = await self.plugin.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Episode", "Recursive": True, "Limit": llimit}, context.context.event)
+        res = await self.plugin.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": True, "Limit": llimit}, context.context.event)
         sid = await self.plugin._get_server_id()
         return json.dumps({"results": res, "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
 
@@ -170,15 +170,15 @@ class EmbyPlugin(Star):
 
     @emby.command("latest")
     async def emby_latest(self, event: AstrMessageEvent, limit: int = None):
-        '''最近上架：/emby latest [数量]'''
+        '''最近更新：/emby latest [数量]'''
         _, _, _, llimit = self._get_config_safe()
         final_limit = limit if limit is not None else llimit
-        res = await self.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "IncludeItemTypes": "Movie,Episode", "Recursive": True, "Limit": final_limit}, event)
+        res = await self.api_request("Items", {"SortBy": "DateCreated", "SortOrder": "Descending", "Recursive": True, "Limit": final_limit}, event)
         items = res.get("Items", [])
         if not items:
             yield event.plain_result("获取最新失败")
             return
-        out = [f"最近上架/更新 (展示 {len(items)} 条):"]
+        out = [f"最近更新 (展示 {len(items)} 条):"]
         for i in items:
             name = i.get('Name')
             # 如果是单集，尝试获取剧名和季度集数
