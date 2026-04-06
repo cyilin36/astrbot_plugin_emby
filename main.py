@@ -15,10 +15,12 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.astr_agent_context import AstrAgentContext
 
 LATEST_MEDIA_TYPE_MAP = {
-    "全部": "Movie,Episode,Audio",
+    "全部": "Movie,Episode,Audio,Video,Photo",
     "电影": "Movie",
     "电视剧": "Episode",
     "音乐": "Audio",
+    "家庭视频": "Video",
+    "照片": "Photo",
 }
 
 LATEST_MEDIA_TYPE_LABELS = " / ".join(LATEST_MEDIA_TYPE_MAP.keys())
