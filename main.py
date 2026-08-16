@@ -25,22 +25,42 @@ LATEST_MEDIA_TYPE_MAP = {
 
 LATEST_MEDIA_TYPE_LABELS = " / ".join(LATEST_MEDIA_TYPE_MAP.keys())
 USER_SCOPED_MEDIA_ENDPOINTS = ("Items",)
+WATCHED_FILTER_MAP = {
+    "全部": None,
+    "已看": "IsPlayed",
+    "未看": "IsUnplayed",
+}
+
+WATCHED_FILTER_LABELS = " / ".join(WATCHED_FILTER_MAP.keys())
 
 # --- 1. LLM 函数工具定义 ---
 
 @pydantic_dataclass
 class EmbySearchTool(FunctionTool[AstrAgentContext]):
     name: str = "search_emby_media"
-    description: str = "搜索 Emby 库中的电影 or 剧集。返回结果包含媒体名称、ID和服务器地址。"
+    description: str = f"搜索 Emby 库中的电影 or 剧集，支持按观看状态过滤（{WATCHED_FILTER_LABELS}）。返回结果包含媒体名称、ID和服务器地址。"
     parameters: dict = Field(default_factory=lambda: {
         "type": "object",
-        "properties": {"keyword": {"type": "string", "description": "搜索关键词"}},
-        "required": ["keyword"]
+        "properties": {
+            "keyword": {"type": "string", "description": "搜索关键词"},
+            "watched": {
+                "type": "string",
+                "enum": list(WATCHED_FILTER_MAP.keys()),
+                "description": f"观看状态过滤，可选：{WATCHED_FILTER_LABELS}。默认是全部。",
+            },
+        },
+        "required": ["keyword"],
     })
     plugin: Any = None
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> str:
         host, _, slimit, _ = self.plugin._get_config_safe()
-        res = await self.plugin.api_request("Items", {"SearchTerm": kwargs.get("keyword"), "Recursive": True, "Limit": slimit}, context.context.event)
+        watched, error = self.plugin._normalize_watched_filter(kwargs.get("watched"))
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+        params = {"SearchTerm": kwargs.get("keyword"), "Recursive": True, "Limit": slimit}
+        if watched:
+            params["Filters"] = watched
+        res = await self.plugin.api_request("Items", params, context.context.event)
         sid = await self.plugin._get_server_id()
         if "error" in res:
             return json.dumps({"error": res["error"], "emby_server_address": host, "emby_server_id": sid}, ensure_ascii=False)
@@ -128,6 +148,12 @@ class EmbyPlugin(Star):
             return None, f"不支持的类型，可选：{LATEST_MEDIA_TYPE_LABELS}"
         return label, None
 
+    def _normalize_watched_filter(self, watched: str | None):
+        label = (watched or "全部").strip()
+        if label not in WATCHED_FILTER_MAP:
+            return None, f"不支持的观看状态，可选：{WATCHED_FILTER_LABELS}"
+        return WATCHED_FILTER_MAP[label], None
+
     def _build_latest_query_params(self, limit: int, media_type: str):
         params = {
             "SortBy": "DateCreated",
@@ -160,6 +186,31 @@ class EmbyPlugin(Star):
             return None, None, error
 
         return media_type, limit, None
+
+    def _parse_search_command_args(self, first_arg: str | None, second_arg: str | None, default_limit: int):
+        watched_label = "全部"
+        limit = default_limit
+        watched_set = False
+
+        for raw_arg in (first_arg, second_arg):
+            if raw_arg is None:
+                continue
+            arg = raw_arg.strip()
+            if not arg:
+                continue
+            if arg.isdigit():
+                limit = int(arg)
+                continue
+            if watched_set or arg not in WATCHED_FILTER_MAP:
+                return None, None, f"参数格式错误，支持：/emby search <关键词> [全部/已看/未看] [数量]"
+            watched_label = arg
+            watched_set = True
+
+        watched, error = self._normalize_watched_filter(watched_label)
+        if error:
+            return None, None, error
+
+        return watched, limit, None
 
     def _get_bindings(self):
         # 回归到独立文件管理
@@ -236,11 +287,17 @@ class EmbyPlugin(Star):
         pass
 
     @emby.command("search")
-    async def emby_search(self, event: AstrMessageEvent, keyword: str, limit: int = None):
-        '''搜索影片：/emby search <关键词> [数量]'''
+    async def emby_search(self, event: AstrMessageEvent, keyword: str, first_arg: str = None, second_arg: str = None):
+        '''搜索影片：/emby search <关键词> [全部/已看/未看] [数量]'''
         _, _, slimit, _ = self._get_config_safe()
-        final_limit = limit if limit is not None else slimit
-        res = await self.api_request("Items", {"SearchTerm": keyword, "Recursive": True, "Limit": final_limit}, event)
+        watched, final_limit, error = self._parse_search_command_args(first_arg, second_arg, slimit)
+        if error:
+            yield event.plain_result(error)
+            return
+        params = {"SearchTerm": keyword, "Recursive": True, "Limit": final_limit}
+        if watched:
+            params["Filters"] = watched
+        res = await self.api_request("Items", params, event)
         if "error" in res:
             yield event.plain_result(res["error"])
             return
